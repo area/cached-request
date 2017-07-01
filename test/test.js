@@ -105,6 +105,41 @@ describe("CachedRequest", function () {
       });
     });
 
+    it("does not respond from the cache if invalidated", function (done) {
+      var self = this;
+      var responseBody = {"a": 1, "b": {"c": 2}};
+      var options = {
+        uri: "http://ping.com/",
+        method: "POST",
+        json: {
+          a: 1
+        },
+        ttl: 5000
+      };
+
+      mock(options.method, 1, function () {
+        return new MockedResponseStream({}, JSON.stringify(responseBody));
+      });
+
+      this.cachedRequest(options, function (error, response, body) {
+        if (error) return done(error);
+        expect(response.statusCode).to.equal(200);
+        expect(response.headers["x-from-cache"]).to.not.exist;
+        expect(body).to.deep.equal(responseBody);
+        self.cachedRequest.invalidateCache(options);
+        mock(options.method, 1, function () {
+          return new MockedResponseStream({}, JSON.stringify(responseBody));
+        });
+        self.cachedRequest(options, function (error, response, body) {
+          if (error) return done(error);
+          expect(response.statusCode).to.equal(200);
+          expect(response.headers["x-from-cache"]).to.not.exist();
+          expect(body).to.deep.equal(responseBody);
+          done();
+        });
+      });
+    });
+
     it("responds from the cache using get extension method", function (done) {
       var self = this;
       var responseBody = {"a": 1, "b": {"c": 2}};
@@ -305,7 +340,7 @@ describe("CachedRequest", function () {
       //Return gzip compressed response with valid content encoding header
       mock("GET", 1, function () {
         return new MockedResponseStream({}, responseBody).pipe(zlib.createGzip());
-      }, 
+      },
       {
         "Content-Encoding": "gzip"
       });
